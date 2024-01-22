@@ -22,8 +22,9 @@ def rhs_odeint(y, t):
     a = 0.7
     c = 0.007
     b = 1
-    p1 = y[0]
-    p2 = y[1]
+    # p1 = y[0]
+    # p2 = y[1]
+    p1, p2 = y
 
     dp1dt = a * p1 - c * p1 * p2
     dp2dt = c * p1 * p2 - b * p2
@@ -57,7 +58,7 @@ ax1.plot(sol.t, p2, '-og', label='foxes')
 ax1.legend()
 ax1.set_xlabel('t')
 ax1.set_title('Runge-Kutta method')
-plt.savefig('./export/predprey_runge.png')
+# plt.savefig('./export/predprey_runge.png')
 
 # odeint - lsoda method
 lsoda = odeint(rhs_odeint, p0, ts)
@@ -70,6 +71,6 @@ ax2.plot(ts, lsoda_2, label='foxes')
 ax2.legend()
 ax2.set_xlabel('t')
 ax2.set_title('LSODA method')
-plt.savefig('./export/predprey_lsoda.png')
+# plt.savefig('./export/predprey_lsoda.png')
 
 plt.show()
