@@ -141,7 +141,7 @@ def work_hit_max(t, y, *args):
     return y[0] - xf
 
 
-# work_hit_max.terminal = True
+work_hit_max.terminal = True
 
 y0 = [x0, v0, T0, m0]
 t0 = 0
