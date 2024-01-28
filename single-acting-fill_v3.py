@@ -3,6 +3,8 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 
+# V2 - Use adiabatic process formula to calculate current temp in the cylinder:
+# pT^(gamma/gamma-1) = const
 
 # Initial physical data
 # Constants
@@ -76,7 +78,7 @@ x0 = 0
 v0 = 0
 T0 = T_in
 m0 = P_atm * dead_volume / R / T0
-# P0 = m0 / dead_volume * R * T0
+P0 = m0 / dead_volume * R * T0
 
 print(f"""
 {m0=},
@@ -91,13 +93,18 @@ def get_relative_valve_torque(relative_travel):
 
 
 def ds_dt(t, y):
-    x, v, T_s, m_s = y
+    x, v, T_s, m_s, P_s = y
 
-    P_s = m_s / (x * piston_surface + dead_volume) * R * T_s
-    print(f"{T_s=}")
-    print(f"{P_s=}")
 
-    delta_p_valve = P_in - P_s
+
+    # P_s = m_s * R * T_s / (x * piston_surface + dead_volume)
+
+    # P_s = math.pow((m_s / (x * piston_surface + dead_volume) * R * T_in * P_in**(1/3.5)), 1.75)
+    # P_s = m_s / (x * piston_surface + dead_volume) * R * T_in
+    # operating_pressure.append(P_s)
+    # print(P_s / 100_000)
+
+    delta_p_valve = abs(P_in - P_s)
     x_factor_valve = delta_p_valve / P_in
     expansion_factor = max(2/3, (1 - (1/3) * (1.4/gamma_air) * (x_factor_valve/x_t_valve)))
 
@@ -114,22 +121,29 @@ def ds_dt(t, y):
     # add - DM - friction force
     F_static_friction = friction_force + F_valve
     F_spring = spring_force_relaxed + spring_force_comp_factor * x
-    F_pressure_spring = (P_s - P_atm) * piston_surface - F_spring
-    F_diff = abs(F_pressure_spring) - F_static_friction
+    F_pressure__spring = (P_s - P_atm) * piston_surface - F_spring
+    F_diff = abs(F_pressure__spring) - F_static_friction
     if F_diff > 0:
-        F_result = math.copysign(1, F_pressure_spring) * F_diff
+        F_result = math.copysign(1, F_pressure__spring) * F_diff
     else:
         F_result = 0
 
-    dxdt = v
-    dvdt = F_result / M
+    if x >= xf:
+        x = 0
+        dxdt = 0
+        v = 0
+        dvdt = 0
+    else:
+        dxdt = v
+        dvdt = F_result / M
     dTdt = (-c_p * T_s * Q_m_in - P_s * piston_surface * v + Q_m_in * c_v * T_in) / c_p / m_s
     dmdt = Q_m_in
+    dpdt = gamma_air * Q_m_in * R * T_s / (dead_volume + piston_surface * x) - gamma_air * P_s * Q_V_in / (dead_volume + piston_surface * x)
 
     # operating_pressure.append(P_s)
     # operating_time.append(t)
 
-    return [dxdt, dvdt, dTdt, dmdt]
+    return [dxdt, dvdt, dTdt, dmdt, dpdt]
 
 
 def work_hit_max(t, y, *args):
@@ -138,7 +152,7 @@ def work_hit_max(t, y, *args):
 
 work_hit_max.terminal = True
 
-y0 = [x0, v0, T0, m0]
+y0 = [x0, v0, T0, m0, P0]
 t0 = 0
 t_final = 15
 ts = np.linspace(t0, t_final, 1000)
@@ -152,21 +166,31 @@ x1 = sol.y[0]
 v1 = sol.y[1]
 T1 = [x - 273 for x in sol.y[2]]
 m1 = sol.y[3]
-# p1 = [x/1000_000 for x in sol.y[4]]
+p1 = [x/100_000 for x in sol.y[4]]
 
-print("Time to fill", sol.t[-1])
+time_to_fill = sol.t[-1]
+print("Time to fill", time_to_fill)
+# psize = len(operating_pressure)
+# tp = np.linspace(t0, time_to_fill, psize)
+# operating_pressure = [x/100_000 for x in operating_pressure]
 
-fig, (ax1, ax2) = plt. subplots(2, 1)
+fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
 ax1.plot(sol.t, x1, label="Travel")
 ax1.plot(sol.t, v1, label="Velocity")
 ax1.plot(sol.t, m1, label="Mass")
 # ax1.plot(sol.t, p1, label="Pressure")
 ax1.legend()
-ax2.plot(sol.t, T1, label="Temperature")
-# ax2.plot(operating_time, operating_pressure, label="Pressure")
+# ax2.plot(sol.t, T1, label="Temperature")
+# ax2.plot(tp, operating_pressure, label="Pressure")
+ax2.plot(sol.t, p1, label="Pressure")
 ax2.legend()
+
+ax3.plot(sol.t, T1, label="Temperature")
+ax3.legend()
+
 plt.show()
 
 
 # print(operating_pressure)
 # print(operating_time)
+
