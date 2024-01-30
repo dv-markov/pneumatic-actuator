@@ -2,9 +2,10 @@ import math
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
+from pprint import pprint
 
-# V3 - use p formula from Baltic Voenmech
-# Seems to be not correct
+# V5 - use dp/dt formula from SPB_Polytechnic, Donskoy
+# remove force from differential equation
 
 # Initial physical data
 # Constants
@@ -23,7 +24,7 @@ pi = math.pi
 T_in = 20 + 273  # K
 P_supply = 4.0 * 100_000  # Pa
 P_in = P_supply + P_atm  # Pa
-kv_total = 0.5 / 3600  # m^3/s
+kv_total = 0.05 / 3600  # m^3/s
 rho_in = P_in / (R * T_in)
 # Calculated pneumatic valve values
 delta_p_max = x_t_valve * gamma_air * P_in / 1.4  # Pa
@@ -34,7 +35,7 @@ torque_da = 1508  # N*m, @ P_in
 torque_spring_start = 664.8  # N*m
 torque_spring_end = 492.6  # N*m
 total_volume = 11.40 / 1000  # m3
-act_weight = 77.76
+act_weight = 77.76  # kg
 
 # Valve data
 valve_torque_bto = 330  # N*m
@@ -44,7 +45,7 @@ alfa = 2.89  # invariant of rack & pinion piston actuator, alfa = piston_diamete
 piston_diameter = math.pow((4 * alfa * torque_da / pi / P_supply), 1/3)  # m
 piston_surface = pi * math.pow(piston_diameter, 2) / 4  # m2
 lever_length = torque_da / P_supply / piston_surface
-dead_volume = total_volume * 0.2
+dead_volume = total_volume * 0.1
 full_stroke = (total_volume - dead_volume) / piston_surface
 spring_force_relaxed = torque_spring_end / full_stroke
 spring_force_comp_factor = (torque_spring_start - torque_spring_end) / full_stroke / lever_length
@@ -64,133 +65,136 @@ print(f"""
     {friction_force=},
     {M=},
     {torque_air_start=},
-    {torque_air_end=};""",
-    # sep="\n",
-)
+    {torque_air_end=};
+""")
 
 # Calculated values
 # piston_diameter = piston_diameter
 # V_extra = dead_volume # m3
+x_01 = dead_volume / piston_surface
 xf = full_stroke  # m
-
-# Initial ODE data
-x0 = 0
-v0 = 0
-T0 = T_in
-m0 = P_atm * dead_volume / R / T0
-P0 = m0 / dead_volume * R * T0
-
-print(f"""
-{m0=},
-{rho_in=};
-""")
+S = piston_surface
+k = gamma_air
 
 
-def get_relative_valve_torque(relative_travel):
-    x_r = relative_travel
+def get_relative_valve_torque(rel_travel):
+    x_r = rel_travel
     f_x = 1 - 3.83*x_r + 13.65*x_r**2 - 28.39*x_r**3 + 33.51*x_r**4 - 19.53*x_r**5 + 4.34*x_r**6
     return f_x
 
 
 def ds_dt(t, y):
-    x, v, T_s, m_s, P_s = y
-
-
-
-    # P_s = m_s * R * T_s / (x * piston_surface + dead_volume)
-
-    # P_s = math.pow((m_s / (x * piston_surface + dead_volume) * R * T_in * P_in**(1/3.5)), 1.75)
-    # P_s = m_s / (x * piston_surface + dead_volume) * R * T_in
-    # operating_pressure.append(P_s)
-    # print(P_s / 100_000)
-
-    delta_p_valve = abs(P_in - P_s)
-    x_factor_valve = delta_p_valve / P_in
-    expansion_factor = max(2/3, (1 - (1/3) * (1.4/gamma_air) * (x_factor_valve/x_t_valve)))
-
-    Q_V_in = kv_total * expansion_factor * math.pow(
-        (rho_0 * min(delta_p_valve, delta_p_max) / rho_in / delta_p_0),
-        1/2)
-    Q_m_in = rho_in * Q_V_in
+    x, v, p = y
 
     relative_travel = x / xf
     valve_torque_factor = get_relative_valve_torque(relative_travel)
     valve_current_torque = valve_torque_bto * valve_torque_factor
     F_valve = valve_current_torque / lever_length
 
-    # add - DM - friction force
     F_static_friction = friction_force + F_valve
     F_spring = spring_force_relaxed + spring_force_comp_factor * x
-    F_pressure__spring = (P_s - P_atm) * piston_surface - F_spring
+    F_pressure = (p - P_atm) * S
+    F_pressure__spring = F_pressure - F_spring
     F_diff = abs(F_pressure__spring) - F_static_friction
     if F_diff > 0:
         F_result = math.copysign(1, F_pressure__spring) * F_diff
     else:
         F_result = 0
 
-    if x >= xf:
+    if x < 0:
         x = 0
+        v = max(0, v)
+
+    if x >= xf:
+        x = xf
         dxdt = 0
         v = 0
         dvdt = 0
     else:
         dxdt = v
         dvdt = F_result / M
-    dTdt = (-c_p * T_s * Q_m_in - P_s * piston_surface * v + Q_m_in * c_v * T_in) / c_p / m_s
-    dmdt = Q_m_in
-    dpdt = gamma_air * Q_m_in * R * T_s / (dead_volume + piston_surface * x) - gamma_air * P_s * Q_V_in / (dead_volume + piston_surface * x)
 
-    # operating_pressure.append(P_s)
-    # operating_time.append(t)
+    dpdt = math.copysign(1, (P_in - p)) * kv_total * k * math.sqrt(
+        R*T_in*0.005*(abs(P_in**2 - p**2))
+    ) / (S * (x + x_01)) - k * p * v / (x + x_01)
 
-    return [dxdt, dvdt, dTdt, dmdt, dpdt]
+    return [dxdt, dvdt, dpdt]
 
 
 def work_hit_max(t, y, *args):
-    return y[0] - xf
+    return (y[0] - xf) + (y[2] - P_in)
 
 
 work_hit_max.terminal = True
 
-y0 = [x0, v0, T0, m0, P0]
+# Initial ODE data
+x0 = 0
+v0 = 0
+p0 = P_atm
+
+y0 = [x0, v0, p0]
 t0 = 0
 t_final = 15
-ts = np.linspace(t0, t_final, 1000)
+ts = np.linspace(t0, t_final, 10000)
 events = [work_hit_max, ]
-# operating_pressure = []
-# operating_time = []
 
-sol = solve_ivp(ds_dt, [t0, t_final], y0, t_eval=ts, events=events)
+sol = solve_ivp(ds_dt, [t0, t_final], y0, method='BDF', t_eval=ts, events=events)
+
+# RK23 - not bad
+# Radau - Runge-Kutta error controlled - good result
+# BDF - seems to be a bit slower than Radau
+# LSODA - good result
 
 x1 = sol.y[0]
 v1 = sol.y[1]
-T1 = [x - 273 for x in sol.y[2]]
-m1 = sol.y[3]
-p1 = [x/100_000 for x in sol.y[4]]
+p1 = sol.y[2]
+p1_bar = [x/100_000 for x in p1]
+
 
 time_to_fill = sol.t[-1]
 print("Time to fill", time_to_fill)
-# psize = len(operating_pressure)
-# tp = np.linspace(t0, time_to_fill, psize)
-# operating_pressure = [x/100_000 for x in operating_pressure]
 
+# fig, (ax1, ax2) = plt.subplots(1, 2)
 fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
 ax1.plot(sol.t, x1, label="Travel")
 ax1.plot(sol.t, v1, label="Velocity")
-ax1.plot(sol.t, m1, label="Mass")
-# ax1.plot(sol.t, p1, label="Pressure")
 ax1.legend()
-# ax2.plot(sol.t, T1, label="Temperature")
-# ax2.plot(tp, operating_pressure, label="Pressure")
-ax2.plot(sol.t, p1, label="Pressure")
+
+ax2.plot(sol.t, p1_bar, label="Pressure")
 ax2.legend()
 
-ax3.plot(sol.t, T1, label="Temperature")
+f_pressure = np.array(p1)
+f_result = np.array(p1)
+f_spring = np.array(p1)
+f_static_friction = np.array(p1)
+
+for i, p in enumerate(p1):
+    x = x1[i]
+    relative_travel = x / xf
+    valve_torque_factor = get_relative_valve_torque(relative_travel)
+    valve_current_torque = valve_torque_bto * valve_torque_factor
+    F_valve = valve_current_torque / lever_length
+
+    F_static_friction = friction_force + F_valve
+    f_static_friction[i] = F_static_friction
+    F_spring = spring_force_relaxed + spring_force_comp_factor * x
+    f_spring[i] = F_spring
+    F_pressure = (p - P_atm) * S
+    f_pressure[i] = F_pressure
+    F_pressure__spring = F_pressure - F_spring
+    F_diff = abs(F_pressure__spring) - F_static_friction
+    if F_diff > 0:
+        F_result = math.copysign(1, F_pressure__spring) * F_diff
+    else:
+        F_result = 0
+    f_result[i] = F_result
+
+ax3.plot(sol.t, f_pressure, label="F_pressure")
+ax3.plot(sol.t, f_spring, label="F_spring")
+ax3.plot(sol.t, f_static_friction, label="F_static_friction + valve load")
 ax3.legend()
 
+ax4.plot(sol.t, f_result, label="F_result")
+ax4.legend()
+
 plt.show()
-
-
-# print(operating_pressure)
-# print(operating_time)
-
