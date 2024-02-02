@@ -5,7 +5,7 @@ delta_p_0 = 100_000  # Pa
 rho_0 = 1000  # kg/m3
 R = 286.69  # J/kg*K, for air
 p_atm = 101_325  # Pa
-
+lambda_air = 0.03
 
 def dzeta_calculated_from_kv(d, kv):
     return (delta_p_0 * pi ** 2 * d ** 4) / (8 * rho_0 * kv ** 2)
@@ -34,7 +34,21 @@ def gm_calculated(kv, p_1, p_2, T_op):
 
 def kv_calculated_from_dzeta(d, dzeta):
     f = pi * d ** 2 / 4
-    return f * math.pow(2 * delta_p_0 / (dzeta * rho_0), 1 / 2)
+    return f * math.sqrt(2 * delta_p_0 / (dzeta * rho_0))
+
+
+def dzeta_calculated_for_pipe(pipe_inner_diameter, pipe_length, lamda_gas):
+    return lamda_gas * pipe_length / pipe_inner_diameter
+
+
+def kv_calculated_for_pipe(pipe_inner_diameter, pipe_length):
+    d = pipe_inner_diameter
+    l = pipe_length
+    return pi * math.sqrt(2*delta_p_0) * math.pow(d, 5/2) / math.sqrt(lambda_air * l * rho_0) / 4
+
+
+def kv_addition(kv_1, kv_2):
+    return kv_1 * kv_2 / math.sqrt(kv_1**2 + kv_2**2)
 
 
 # Input data
@@ -93,3 +107,19 @@ for acc in accessories_p_17:
     print(f"N {acc[0]}, d = {d_mm} mm, dzeta = {dzeta}, "
           f"Kvs = {kv_calculated_from_dzeta(d_meter, dzeta) * 3600:.2f} m3/h")
 
+d_mm = 5  # mm
+le_mm = 100  # mm
+
+d_m = d_mm / 1000  # m
+le_m = le_mm / 1000  # m
+
+dzeta_pipe = dzeta_calculated_for_pipe(d_m, le_m, lambda_air)
+print(dzeta_pipe)
+kv_pipe = kv_calculated_from_dzeta(d_m, dzeta_pipe)
+print(kv_pipe * 3600)
+kv_pipe_2 = kv_calculated_for_pipe(d_m, le_m)
+print(kv_pipe_2 * 3600)
+
+kv_1 = 0.5
+kv_2 = kv_pipe * 3600
+print(kv_addition(kv_1, kv_2))

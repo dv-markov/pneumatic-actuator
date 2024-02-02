@@ -3,6 +3,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 from pprint import pprint
+from flowcalc import kv_dzeta
 
 # V5 - use dp/dt formula from SPB_Polytechnic, Donskoy
 # remove force from differential equation
@@ -24,7 +25,7 @@ pi = math.pi
 T_in = 20 + 273  # K
 P_supply = 4.0 * 100_000  # Pa
 P_in = P_supply + P_atm  # Pa
-kv_total = 0.05 / 3600  # m^3/s
+kv_total = 0.5 / 3600  # m^3/s
 rho_in = P_in / (R * T_in)
 # Calculated pneumatic valve values
 delta_p_max = x_t_valve * gamma_air * P_in / 1.4  # Pa
@@ -168,6 +169,10 @@ f_result = np.array(p1)
 f_spring = np.array(p1)
 f_static_friction = np.array(p1)
 
+qv_array = np.array(p1)
+qm_array = np.array(p1)
+gm_array = np.array(p1)
+
 for i, p in enumerate(p1):
     x = x1[i]
     relative_travel = x / xf
@@ -189,12 +194,30 @@ for i, p in enumerate(p1):
         F_result = 0
     f_result[i] = F_result
 
+    delta_p = P_in - p
+    x_factor_valve = delta_p / P_in
+    expansion_factor = max(2 / 3, (1 - (1 / 3) * (1.4 / gamma_air) * (x_factor_valve / x_t_valve)))
+    delta_p_calc = min(delta_p, delta_p_max)
+
+    qv = kv_dzeta.qv_calculated(kv_total, rho_in, delta_p_calc) * expansion_factor
+    qv_array[i] = qv
+    qm = kv_dzeta.qm_calculated(qv, rho_in)
+    qm_array[i] = qm
+    gm = kv_dzeta.gm_calculated(kv_total, P_in, p, T_in)
+    gm_array[i] = gm
+
+
 ax3.plot(sol.t, f_pressure, label="F_pressure")
 ax3.plot(sol.t, f_spring, label="F_spring")
 ax3.plot(sol.t, f_static_friction, label="F_static_friction + valve load")
+ax3.plot(sol.t, f_result, label="F_result")
 ax3.legend()
 
-ax4.plot(sol.t, f_result, label="F_result")
+t_result = sol.t
+
+ax4.plot(t_result, qv_array, label="Qv")
+ax4.plot(t_result, qm_array, label="Qm")
+ax4.plot(t_result, gm_array, label="Gm")
 ax4.legend()
 
 plt.show()
