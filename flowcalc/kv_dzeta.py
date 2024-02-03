@@ -107,14 +107,14 @@ for acc in accessories_p_17:
     print(f"N {acc[0]}, d = {d_mm} mm, dzeta = {dzeta}, "
           f"Kvs = {kv_calculated_from_dzeta(d_meter, dzeta) * 3600:.2f} m3/h")
 
-d_mm = 5  # mm
-le_mm = 100  # mm
+d_mm = 6  # mm
+le_mm = 10  # mm
 
 d_m = d_mm / 1000  # m
 le_m = le_mm / 1000  # m
 
 dzeta_pipe = dzeta_calculated_for_pipe(d_m, le_m, lambda_air)
-print(dzeta_pipe)
+print(f'{dzeta_pipe=}')
 kv_pipe = kv_calculated_from_dzeta(d_m, dzeta_pipe)
 print(kv_pipe * 3600)
 kv_pipe_2 = kv_calculated_for_pipe(d_m, le_m)

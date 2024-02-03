@@ -6,7 +6,7 @@ from pprint import pprint
 from flowcalc import kv_dzeta
 
 # V5 - use dp/dt formula from SPB_Polytechnic, Donskoy
-# remove force from differential equation
+# add p2 and p2_force
 
 # Initial physical data
 # Constants
@@ -25,7 +25,8 @@ pi = math.pi
 T_in = 20 + 273  # K
 P_supply = 4.0 * 100_000  # Pa
 P_in = P_supply + P_atm  # Pa
-kv_total = 0.5 / 3600  # m^3/s
+kv_total = 1.0 / 3600  # m^3/s
+kv_total_2 = 4.0 / 3600  # m^3/s
 rho_in = P_in / (R * T_in)
 # Calculated pneumatic valve values
 delta_p_max = x_t_valve * gamma_air * P_in / 1.4  # Pa
@@ -75,6 +76,7 @@ print(f"""
 # piston_diameter = piston_diameter
 # V_extra = dead_volume # m3
 x_01 = dead_volume / piston_surface
+x_02 = x_01 * 2
 xf = full_stroke  # m
 S = piston_surface
 k = gamma_air
@@ -87,7 +89,7 @@ def get_relative_valve_torque(rel_travel):
 
 
 def ds_dt(t, y):
-    x, v, p = y
+    x, v, pc_1, pc_2 = y
 
     relative_travel = x / xf
     valve_torque_factor = get_relative_valve_torque(relative_travel)
@@ -96,7 +98,7 @@ def ds_dt(t, y):
 
     F_static_friction = friction_force + F_valve
     F_spring = spring_force_relaxed + spring_force_comp_factor * x
-    F_pressure = (p - P_atm) * S
+    F_pressure = (pc_1 - P_atm) * S
     F_pressure__spring = F_pressure - F_spring
     F_diff = abs(F_pressure__spring) - F_static_friction
     if F_diff > 0:
@@ -111,21 +113,42 @@ def ds_dt(t, y):
     if x >= xf:
         x = xf
         dxdt = 0
+        if v > 0:
+            dvdt = -v
+        else:
+            dvdt = 0
         v = 0
-        dvdt = 0
     else:
         dxdt = v
         dvdt = F_result / M
 
-    dpdt = math.copysign(1, (P_in - p)) * kv_total * k * math.sqrt(
-        R*T_in*0.005*(abs(P_in**2 - p**2))
-    ) / (S * (x + x_01)) - k * p * v / (x + x_01)
+    dpc_1dt = math.copysign(1, (P_in - pc_1)) * kv_total * k * math.sqrt(
+        R*T_in*0.005*(abs(P_in**2 - pc_1**2))
+    ) / (S * (x + x_01)) - k * pc_1 * v / (x + x_01)
 
-    return [dxdt, dvdt, dpdt]
+    dpc_2dt = (-1) * math.copysign(1, (pc_2 - P_atm)) * kv_total_2 * k * math.sqrt(
+        R*T_in*0.005*(abs(pc_2**2 - P_atm**2))
+    ) * math.pow(
+        abs(pc_2) / P_in,
+        (k - 1) / (2 * k)
+    ) / (S * (xf - x + x_02)) + k * pc_2 * v / (xf - x + x_02)
+
+    # dpc_2dt = (-1) * kv_total_2 * k * math.sqrt(
+    #     R*T_in*0.005*(pc_2**2 - P_in**2)
+    # ) * math.pow(
+    #     pc_2 / P_in,
+    #     (k - 1) / (2 * k)
+    # ) / (S * (xf - x + x_02)) + k * pc_2 * v / (xf - x + x_02)
+
+    return [dxdt, dvdt, dpc_1dt, dpc_2dt]
 
 
 def work_hit_max(t, y, *args):
     return (y[0] - xf) + (y[2] - P_in)
+
+
+def p2_equals_atm(t, y, *args):
+    return y[3] - P_in
 
 
 work_hit_max.terminal = True
@@ -133,13 +156,16 @@ work_hit_max.terminal = True
 # Initial ODE data
 x0 = 0
 v0 = 0
-p0 = P_atm
+pc1_0 = P_atm
+pc2_0 = P_atm
 
-y0 = [x0, v0, p0]
+y0 = [x0, v0, pc1_0, pc2_0]
 t0 = 0
 t_final = 15
 ts = np.linspace(t0, t_final, 10000)
-events = [work_hit_max, ]
+events = [work_hit_max,
+          # p2_equals_atm,
+          ]
 
 sol = solve_ivp(ds_dt, [t0, t_final], y0, method='BDF', t_eval=ts, events=events)
 
@@ -152,7 +178,8 @@ x1 = sol.y[0]
 v1 = sol.y[1]
 p1 = sol.y[2]
 p1_bar = [x/100_000 for x in p1]
-
+p2 = sol.y[3]
+p2_bar = [x/100_000 for x in p2]
 
 time_to_fill = sol.t[-1]
 print("Time to fill", time_to_fill)
@@ -163,7 +190,8 @@ ax1.plot(sol.t, x1, label="Travel")
 ax1.plot(sol.t, v1, label="Velocity")
 ax1.legend()
 
-ax2.plot(sol.t, p1_bar, label="Pressure")
+ax2.plot(sol.t, p1_bar, label="Pressure 1st cyl")
+ax2.plot(sol.t, p2_bar, label="Pressure 2nd cyl")
 ax2.legend()
 
 f_pressure = np.array(p1)
@@ -196,7 +224,7 @@ for i, p in enumerate(p1):
         F_result = 0
     f_result[i] = F_result
 
-    delta_p = P_in - p
+    delta_p = abs(P_in - p)
     x_factor_valve = delta_p / P_in
     expansion_factor = max(2 / 3, (1 - (1 / 3) * (1.4 / gamma_air) * (x_factor_valve / x_t_valve)))
     delta_p_calc = min(delta_p, delta_p_max)
@@ -205,8 +233,8 @@ for i, p in enumerate(p1):
     qv_array[i] = qv
     qm = kv_dzeta.qm_calculated(qv, rho_in)
     qm_array[i] = qm
-    gm = kv_dzeta.gm_calculated(kv_total, P_in, p, T_in)
-    gm_array[i] = gm
+    # gm = kv_dzeta.gm_calculated(kv_total, P_in, abs(p), T_in)
+    # gm_array[i] = gm
 
 
 ax3.plot(sol.t, f_pressure, label="F_pressure")
@@ -219,7 +247,7 @@ t_result = sol.t
 
 ax4.plot(t_result, qv_array, label="Qv")
 ax4.plot(t_result, qm_array, label="Qm")
-ax4.plot(t_result, gm_array, label="Gm")
+# ax4.plot(t_result, gm_array, label="Gm")
 ax4.legend()
 
 plt.show()
