@@ -1,4 +1,5 @@
 from constants import *
+from valve_and_actuator_data import *
 
 # Variables
 # General data
@@ -8,17 +9,6 @@ P_in = P_supply + P_atm  # Pa
 rho_in = P_in / (R * T_in)
 # Calculated pneumatic valve values
 delta_p_max = x_t_valve * gamma_air * P_in / 1.4  # Pa
-
-# Actuator data
-act_model = "VT240 S06"
-torque_da = 1508  # N*m, @ P_in
-torque_spring_start = 664.8  # N*m
-torque_spring_end = 492.6  # N*m
-total_volume = 11.40 / 1000  # m3
-act_weight = 77.76  # kg
-
-# Valve data
-valve_torque_bto = 330  # N*m
 
 # Advanced data - calculated actuator values
 alfa = 2.89  # invariant of rack & pinion piston actuator, alfa = piston_diameter / lever_length

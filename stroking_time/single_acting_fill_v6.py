@@ -9,11 +9,6 @@ from initial_data import *
 # add p2 and p2_force
 # move initial data to separate module
 
-# Kv_data and piping data
-kv_in_1 = 0.32 / 3600  # m^3/s
-d_pipe = 5 / 1000  # m
-le_pipe = 100 / 1000  # m
-
 # Kv_calculation
 kv_pipe = kv_dzeta.kv_calculated_for_pipe(d_pipe, le_pipe)
 print(f'Kv_pipe = {kv_pipe * 3600:.2f} m3/h')
@@ -139,6 +134,7 @@ sol = solve_ivp(ds_dt, [t0, t_final], y0, method='BDF', t_eval=ts, events=events
 # BDF - seems to be a bit slower than Radau
 # LSODA - good result
 
+t_result = sol.t
 x1 = sol.y[0]
 v1 = sol.y[1]
 p1 = sol.y[2]
@@ -153,12 +149,12 @@ print(f"Filling time = {time_to_fill:.2f} sec")
 
 # fig, (ax1, ax2) = plt.subplots(1, 2)
 fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
-ax1.plot(sol.t, x1, label="Travel")
-ax1.plot(sol.t, v1, label="Velocity")
+ax1.plot(t_result, x1, label="Travel")
+ax1.plot(t_result, v1, label="Velocity")
 ax1.legend()
 
-ax2.plot(sol.t, p1_bar, label="Pressure 1st cyl")
-ax2.plot(sol.t, p2_bar, label="Pressure 2nd cyl")
+ax2.plot(t_result, p1_bar, label="Pressure 1st cyl")
+ax2.plot(t_result, p2_bar, label="Pressure 2nd cyl")
 ax2.legend()
 
 f_pressure = np.array(p1)
@@ -191,13 +187,11 @@ for i, p in enumerate(p1):
         ind=i,
     )
 
-ax3.plot(sol.t, f_pressure, label="F_pressure")
-ax3.plot(sol.t, f_spring, label="F_spring")
-ax3.plot(sol.t, f_static_friction, label="F_static_friction + valve load")
-ax3.plot(sol.t, f_result, label="F_result")
+ax3.plot(t_result, f_pressure, label="F_pressure")
+ax3.plot(t_result, f_spring, label="F_spring")
+ax3.plot(t_result, f_static_friction, label="F_static_friction + valve load")
+ax3.plot(t_result, f_result, label="F_result")
 ax3.legend()
-
-t_result = sol.t
 
 ax4.plot(t_result, qv_array, label="Qv")
 ax4.plot(t_result, qm_array, label="Qm")
