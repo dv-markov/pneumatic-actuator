@@ -24,8 +24,12 @@ def qv_calculated(kv, rho_op, delta_p_1):
     return kv * math.pow(rho_0 * delta_p_1, 1 / 2) / math.pow(rho_op * delta_p_0, 1 / 2)
 
 
-def qm_calculated(qv, rho_op):
+def qm_calculated_from_qv(qv, rho_op):
     return qv * rho_op
+
+
+def qm_calculated(kv, rho_op, delta_p_1):
+    return rho_op * kv * math.pow(rho_0 * delta_p_1, 1 / 2) / math.pow(rho_op * delta_p_0, 1 / 2)
 
 
 def gm_calculated(kv, p_1, p_2, T_op):
@@ -72,8 +76,10 @@ if __name__ == '__main__':
 
     qv1 = qv_calculated(kvs, rho_1, delta_pc)
     print('Qv =', qv1, "m3/s =", qv1 * 3600, "m3/h;")
-    qm1 = qm_calculated(qv1, rho_1)
-    print('Qm =', qm1, "kg/s =", qm1 * 3600, "kg/h;")
+    qm1 = qm_calculated_from_qv(qv1, rho_1)
+    print('Qm_calculated_from_Qv =', qm1, "kg/s =", qm1 * 3600, "kg/h;")
+    qm2 = qm_calculated(kvs, rho_1, delta_pc)
+    print('Qm =', qm2, "kg/s =", qm2 * 3600, "kg/h;")
     gm1 = gm_calculated(kvs, pc_1, pc_2, T_1)
     print('Gm = ', gm1, "kg/s =", gm1 * 3600, "kg/h;")
     print()
