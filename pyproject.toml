@@ -1,0 +1,17 @@
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[project]
+name = "pneumaticactuator"
+version = "0.7.0"
+description = "Stroking time calculation for pneumatic actuators"
+dependencies = [
+  "numpy",
+  "scipy",
+  "matplotlib",
+]
+requires-python = ">= 3.11"
+authors = [
+  {name = "Dmitry Markov", email = "dmitry.v.markov@gmail.com"},
+]
