@@ -1,6 +1,8 @@
 # Kv_data and piping data
 kv_in_1 = 0.32 / 3600  # m^3/s
-kv_out_1 = 1.4 / 3600  # m^3/s
+kv_out_1 = 0.32 / 3600  # m^3/s
+# kv_in_1 = 1.1 / 3600  # m^3/s
+# kv_out_1 = 2.0 / 3600  # m^3/s
 d_pipe = 5 / 1000  # m
 le_pipe = 100 / 1000  # m
 
