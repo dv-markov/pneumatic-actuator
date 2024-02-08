@@ -6,8 +6,7 @@ import kv_dzeta
 from initial_data import *
 
 # V6 - use dp/dt formula from SPB_Polytechnic, Donskoy
-# add p2 and p2_force
-# move initial data to separate module
+# add new force concept
 
 # Governing flags
 QV_IEC = False
@@ -41,14 +40,22 @@ def get_f_result(x, v, pc_1, pc_2, plot=False, force_dict=None, flow_dict=None, 
     F_pressure_2 = (pc_2 - P_atm) * S
     F_pressure__spring = F_pressure_1 - F_pressure_2 - F_spring
 
-    if (v == 0) and (abs(F_pressure__spring) < F_static_load):  #  or (abs(F_pressure__spring) < F_dynamic_load):
-        F_result = 0
+    if v == 0:
+        if abs(F_pressure__spring) < F_static_load:
+            F_result = 0
+        else:
+            F_result = math.copysign(1, F_pressure__spring) * (
+                    abs(F_pressure__spring) - F_static_load) - F_viscous_friction
     else:
-        F_result = math.copysign(1, F_pressure__spring) * (
-                abs(F_pressure__spring) - F_dynamic_load) - F_viscous_friction
+        if abs(F_pressure__spring) < F_dynamic_load:
+            F_result = 0
+        else:
+            F_result = math.copysign(1, F_pressure__spring) * (
+                    abs(F_pressure__spring) - F_dynamic_load) - F_viscous_friction
 
     if plot:
-        force_dict['f_static_friction'][ind] = F_dynamic_load
+        force_dict['f_static_load'][ind] = F_static_load
+        force_dict['f_dynamic_load'][ind] = F_dynamic_load
         force_dict['f_viscous_friction'][ind] = F_viscous_friction
         force_dict['f_spring'][ind] = F_spring
         force_dict['f_pressure'][ind] = F_pressure_1 - F_pressure_2
@@ -161,7 +168,15 @@ t_result = sol.t
 x1 = sol.y[0]
 x1_mm = x1 * 1000
 v1 = sol.y[1]
-v1_mm_s = v1 * 100
+
+# Сглаживание
+# win = 300
+# filt = np.ones(win)/win
+# mov = win // 2
+# res = np.convolve(v1, filt, mode='same')
+# res = v1
+
+v1_mm_s = v1 * 1000
 p1 = sol.y[2]
 p1_bar = [(x - P_atm) / 100_000 for x in p1]
 p2 = sol.y[3]
@@ -178,7 +193,7 @@ if sol.t_events:
 # fig, (ax1, ax2) = plt.subplots(1, 2)
 fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
 ax1.plot(t_result, x1_mm, label="Travel, mm")
-ax1.plot(t_result, v1_mm_s, label="Velocity, 10*mm/s")
+ax1.plot(t_result, v1_mm_s, label="Velocity, mm/s")
 ax1.legend()
 
 ax2.plot(t_result, p1_bar, label="Pressure 1st cyl, bar(g)")
@@ -188,7 +203,8 @@ ax2.legend()
 f_pressure = np.array(p1)
 f_result = np.array(p1)
 f_spring = np.array(p1)
-f_static_friction = np.array(p1)
+f_static_load = np.array(p1)
+f_dynamic_load = np.array(p1)
 f_viscous_friction = np.array(p1)
 
 qv_array = np.array(p1)
@@ -198,7 +214,8 @@ gm_array = np.array(p1)
 forces = {'f_pressure': f_pressure,
           'f_result': f_result,
           'f_spring': f_spring,
-          'f_static_friction': f_static_friction,
+          'f_static_load': f_static_load,
+          'f_dynamic_load': f_dynamic_load,
           'f_viscous_friction': f_viscous_friction,
           }
 
@@ -221,7 +238,8 @@ for i, p in enumerate(p1):
 
 ax3.plot(t_result, f_pressure, label="F_pressure, N")
 ax3.plot(t_result, f_spring, label="F_spring, N")
-ax3.plot(t_result, f_static_friction, label="F_dynamic_load, N")
+ax3.plot(t_result, f_static_load, label="F_static_load, N")
+ax3.plot(t_result, f_dynamic_load, label="F_dynamic_load, N")
 ax3.plot(t_result, f_viscous_friction, label='Viscous friction, N')
 ax3.legend()
 

@@ -18,12 +18,13 @@ alfa = 2.89  # invariant of rack & pinion piston actuator, alfa = piston_diamete
 piston_diameter = math.pow((4 * alfa * torque_da / pi / P_supply), 1/3)  # m
 piston_surface = pi * math.pow(piston_diameter, 2) / 4  # m2
 lever_length = torque_da / P_supply / piston_surface
+friction_force_still = P_master_force * k_friction * piston_surface
+friction_force_move = friction_force_still / 3
 dead_volume = total_volume * 0.1
 full_stroke = (total_volume - dead_volume) / piston_surface
 spring_force_relaxed = torque_spring_end / full_stroke
 spring_force_comp_factor = (torque_spring_start - torque_spring_end) / full_stroke / lever_length
-friction_force_move = P_master_force * k_friction * piston_surface
-friction_force_still = friction_force_move * 3
+
 M = act_weight * 0.3
 torque_air_start = torque_da - torque_spring_end  # N*m
 torque_air_end = torque_da - torque_spring_start  # N*m
