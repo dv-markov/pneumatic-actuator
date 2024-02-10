@@ -6,7 +6,8 @@ import kv_dzeta
 from initial_data import *
 
 # V6 - use dp/dt formula from SPB_Polytechnic, Donskoy
-# add new force concept
+# add new force concept with viscous force
+# add Euler method
 
 # Governing flags
 QV_IEC = False
@@ -33,7 +34,10 @@ def get_f_result(x, v, pc_1, pc_2, plot=False, force_dict=None, flow_dict=None, 
     F_valve = valve_current_torque / lever_length
     F_static_load = F_valve + friction_force_still
     F_dynamic_load = F_valve + friction_force_move
-    F_viscous_friction = 7 * h * v
+    F_viscous_friction = 70 * h * v
+    # <= 7 - makes back stroke
+    # 17 * h * v - not bad, with RK23 gives results similar to real, with Radau also decent
+    # 70 * h * v - very smooth
 
     F_spring = spring_force_relaxed + spring_force_comp_factor * x
     F_pressure_1 = (pc_1 - P_atm) * S
@@ -156,7 +160,7 @@ events = [work_hit_max,
           piston_reach_max_travel
           ]
 
-sol = solve_ivp(ds_dt, [t0, t_final], y0, method='RK23', t_eval=ts, events=events)
+sol = solve_ivp(ds_dt, [t0, t_final], y0, method='Radau', t_eval=ts, events=events)
 # pprint(sol)
 
 # RK23 - not bad
