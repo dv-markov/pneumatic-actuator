@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
@@ -11,6 +13,7 @@ from initial_data import *
 
 # Governing flags
 QV_IEC = False
+EULER_SOLVER = True
 
 # Kv_calculation
 kv_pipe = kv_dzeta.kv_calculated_for_pipe(d_pipe, le_pipe)
@@ -34,10 +37,11 @@ def get_f_result(x, v, pc_1, pc_2, plot=False, force_dict=None, flow_dict=None, 
     F_valve = valve_current_torque / lever_length
     F_static_load = F_valve + friction_force_still
     F_dynamic_load = F_valve + friction_force_move
-    F_viscous_friction = 70 * h * v
-    # <= 7 - makes back stroke
-    # 17 * h * v - not bad, with RK23 gives results similar to real, with Radau also decent
-    # 70 * h * v - very smooth
+    F_viscous_friction = 17 * h * v
+    # <= 7 * h * v - makes back stroke
+    # 17 - not bad, with RK23 gives results similar to real, with Radau also decent
+    # 50 - also smooth enough
+    # 70 - very smooth
 
     F_spring = spring_force_relaxed + spring_force_comp_factor * x
     F_pressure_1 = (pc_1 - P_atm) * S
@@ -64,18 +68,6 @@ def get_f_result(x, v, pc_1, pc_2, plot=False, force_dict=None, flow_dict=None, 
         force_dict['f_spring'][ind] = F_spring
         force_dict['f_pressure'][ind] = F_pressure_1 - F_pressure_2
         force_dict['f_result'][ind] = F_result if x < xf else 0
-
-        # delta_p = abs(P_in - pc_1)
-        # x_factor_valve = delta_p / P_in
-        # expansion_factor = max(2 / 3, (1 - (1 / 3) * (1.4 / gamma_air) * (x_factor_valve / x_t_valve)))
-        # delta_p_calc = min(delta_p, delta_p_max)
-
-        # qv = kv_dzeta.qv_calculated(kv_total_1, rho_in, delta_p_calc) * expansion_factor
-        # flow_dict['qv'][i] = qv * 3600
-        # qm = kv_dzeta.qm_calculated_from_qv(qv, rho_in)
-        # flow_dict['qm'][i] = qm * 3600
-        # gm = kv_dzeta.gm_calculated(kv_total_1, P_in, pc_1, T_in)
-        # gm_array[i] = gm * 3600
 
     return F_result
 
@@ -131,6 +123,41 @@ def ds_dt(t, y):
     return [dxdt, dvdt, dpc_1dt, dpc_2dt]
 
 
+def euler(time, y0):
+    x = np.zeros_like(time)
+    v = np.zeros_like(time)
+    pc_1 = np.zeros_like(time)
+    pc_2 = np.zeros_like(time)
+
+    x[0], v[0], pc_1[0], pc_2[0] = y0
+
+    dt = time[1] - time[0]
+    t_res = time
+    time_stroke = math.inf
+
+    for i, t in enumerate(time[:-1]):
+        dxdt, dvdt, dpc_1dt, dpc_2dt = ds_dt(None, [x[i], v[i], pc_1[i], pc_2[i]])
+        x[i + 1] = x[i] + dxdt * dt
+        v[i + 1] = v[i] + dvdt * dt
+        pc_1[i + 1] = pc_1[i] + dpc_1dt * dt
+        pc_2[i + 1] = pc_2[i] + dpc_2dt * dt
+
+        if x[i + 1] >= xf and t < time_stroke:
+            time_stroke = t
+
+        if x[i + 1] >= xf and pc_1[i + 1] >= P_in:
+            t_res = time[:i+1]
+            x = x[:i + 1]
+            v = v[:i + 1]
+            pc_1 = pc_1[:i + 1]
+            pc_2 = pc_2[:i + 1]
+            break
+
+    y = [x, v, pc_1, pc_2]
+
+    return t_res, y, time_stroke
+
+
 def work_hit_max(t, y, *args):
     return (y[0] - xf) + (y[2] - P_in)
 
@@ -160,39 +187,59 @@ events = [work_hit_max,
           piston_reach_max_travel
           ]
 
-sol = solve_ivp(ds_dt, [t0, t_final], y0, method='Radau', t_eval=ts, events=events)
-# pprint(sol)
+if EULER_SOLVER:
+    # Euler's method
+    eul = euler(ts, y0)
 
-# RK23 - not bad
-# Radau - Runge-Kutta error controlled - good result
-# BDF - seems to be a bit slower than Radau
-# LSODA - good result
+    t_result = eul[0]
+    x1 = eul[1][0]
+    x1_mm = x1 * 1000
+    v1 = eul[1][1]
+    v1_mm_s = v1 * 1000
+    p1 = eul[1][2]
+    p1_bar = [(x - P_atm) / 100_000 for x in p1]
+    p2 = eul[1][3]
+    p2_bar = [(x - P_atm) / 100_000 for x in p2]
 
-t_result = sol.t
-x1 = sol.y[0]
-x1_mm = x1 * 1000
-v1 = sol.y[1]
+    time_to_stroke = eul[2]
+    time_to_fill = t_result[-1]
+else:
+    sol = solve_ivp(ds_dt, [t0, t_final], y0, method='LSODA', t_eval=ts, events=events)
+    # pprint(sol)
 
-# Сглаживание
-# win = 300
-# filt = np.ones(win)/win
-# mov = win // 2
-# res = np.convolve(v1, filt, mode='same')
-# res = v1
+    # RK23 - not bad
+    # Radau - Runge-Kutta error controlled - good result
+    # BDF - seems to be a bit slower than Radau
+    # LSODA - good result, even better results with viscous friction force
 
-v1_mm_s = v1 * 1000
-p1 = sol.y[2]
-p1_bar = [(x - P_atm) / 100_000 for x in p1]
-p2 = sol.y[3]
-p2_bar = [(x - P_atm) / 100_000 for x in p2]
+    # Results for SciPy
+    t_result = sol.t
+    x1 = sol.y[0]
+    x1_mm = x1 * 1000
+    v1 = sol.y[1]
 
-if sol.t_events:
-    if sol.t_events[1].any():
-        time_to_stroke = sol.t_events[1][0]
-        print(f"Stroking time = {time_to_stroke:.2f} sec")
-    if sol.t_events[0].any():
-        time_to_fill = sol.t_events[0][0]
-        print(f"Filling time = {time_to_fill:.2f} sec")
+    # Сглаживание
+    # win = 300
+    # filt = np.ones(win)/win
+    # mov = win // 2
+    # res = np.convolve(v1, filt, mode='same')
+    # res = v1
+
+    v1_mm_s = v1 * 1000
+    p1 = sol.y[2]
+    p1_bar = [(x - P_atm) / 100_000 for x in p1]
+    p2 = sol.y[3]
+    p2_bar = [(x - P_atm) / 100_000 for x in p2]
+
+    time_to_stroke = time_to_fill = math.inf
+    if sol.t_events:
+        if sol.t_events[1].any():
+            time_to_stroke = sol.t_events[1][0]
+        if sol.t_events[0].any():
+            time_to_fill = sol.t_events[0][0]
+
+print(f"Stroking time = {time_to_stroke:.2f} sec")
+print(f"Filling time = {time_to_fill:.2f} sec")
 
 # fig, (ax1, ax2) = plt.subplots(1, 2)
 fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
@@ -204,16 +251,16 @@ ax2.plot(t_result, p1_bar, label="Pressure 1st cyl, bar(g)")
 ax2.plot(t_result, p2_bar, label="Pressure 2nd cyl, bar(g)")
 ax2.legend()
 
-f_pressure = np.array(p1)
-f_result = np.array(p1)
-f_spring = np.array(p1)
-f_static_load = np.array(p1)
-f_dynamic_load = np.array(p1)
-f_viscous_friction = np.array(p1)
+f_pressure = np.zeros_like(p1)
+f_result = np.zeros_like(p1)
+f_spring = np.zeros_like(p1)
+f_static_load = np.zeros_like(p1)
+f_dynamic_load = np.zeros_like(p1)
+f_viscous_friction = np.zeros_like(p1)
 
-qv_array = np.array(p1)
-qm_array = np.array(p1)
-gm_array = np.array(p1)
+# qv_array = np.array(p1)
+# qm_array = np.array(p1)
+# gm_array = np.array(p1)
 
 forces = {'f_pressure': f_pressure,
           'f_result': f_result,
@@ -223,9 +270,9 @@ forces = {'f_pressure': f_pressure,
           'f_viscous_friction': f_viscous_friction,
           }
 
-flows = {'qv': qv_array,
-         'qm': qm_array,
-         'gm': gm_array}
+# flows = {'qv': qv_array,
+#          'qm': qm_array,
+#          'gm': gm_array}
 
 for i, p in enumerate(p1):
     x = x1[i]
@@ -236,7 +283,7 @@ for i, p in enumerate(p1):
         p2[i],
         plot=True,
         force_dict=forces,
-        flow_dict=flows,
+        # flow_dict=flows,
         ind=i,
     )
 
