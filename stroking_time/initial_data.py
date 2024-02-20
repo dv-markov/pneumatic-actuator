@@ -4,12 +4,13 @@ from valve_and_actuator_data import *
 # Variables
 # General data
 T_in = 20 + 273  # K
-P_supply = 4.0 * 100_000  # Pa
+P_supply = 3.5 * 100_000  # Pa
+# P_supply = 6.0 * 100_000  # Pa
 P_in = P_supply + P_atm  # Pa
 P_master_force = 4.0 * 100_000 + P_atm
 rho_in = P_in / (R * T_in)
 # Calculated pneumatic valve values
-delta_p_max = x_t_valve * gamma_air * P_in / 1.4  # Pa
+# delta_p_max = x_t_valve * gamma_air * P_in / 1.4  # Pa
 
 # Advanced data - calculated actuator values
 h = 300

@@ -12,16 +12,28 @@ from initial_data import *
 # add Euler method
 
 # Governing flags
-QV_IEC = False
-EULER_SOLVER = True
+QV_IEC = True
+EULER_SOLVER = False
 
 # Kv_calculation
-kv_pipe = kv_dzeta.kv_calculated_for_pipe(d_pipe, le_pipe)
-print(f'Kv_pipe = {kv_pipe * 3600:.2f} m3/h')
-kv_total_1 = kv_dzeta.kv_addition(kv_in_1, kv_pipe)  # m^3/s
-kv_total_2 = kv_dzeta.kv_addition(kv_out_1, kv_pipe)  # m^3/s
-print(f"""Kv_total_1 = {kv_total_1 * 3600:.2f} m3/h
-Kv_total_2 = {kv_total_2 * 3600:.2f} m3/h""")
+kv_pipe_1 = kv_dzeta.kv_calculated_for_pipe(d_pipe_1, le_pipe_1)
+print(f'Kv_pipe_1 = {kv_pipe_1 * 3600:.2f} m3/h')
+kv_pipe_2 = kv_dzeta.kv_calculated_for_pipe(d_pipe_2, le_pipe_2)
+print(f'Kv_pipe_2 = {kv_pipe_2 * 3600:.2f} m3/h')
+kv_pipe_in = kv_dzeta.kv_addition(kv_pipe_1, kv_pipe_2)
+print(f'Kv_pipe_in = {kv_pipe_in * 3600:.2f} m3/h')
+kv_pipe_3 = kv_dzeta.kv_calculated_for_pipe(d_pipe_3, le_pipe_3)
+print(f'Kv_pipe_3 = {kv_pipe_3 * 3600:.2f} m3/h')
+kv_pipe_out = kv_dzeta.kv_addition(kv_pipe_1, kv_pipe_3)
+print(f'Kv_pipe_out = {kv_pipe_out * 3600:.2f} m3/h')
+print(f"""Kv_in_device_1 = {kv_in_1 * 3600:.2f} m3/h; Kv_in_device_2 = {kv_in_2 * 3600:.2f} m3/h""")
+print(f"""Kv_out_device_1 = {kv_out_1 * 3600:.2f} m3/h""")
+kv_in_devices_total = kv_dzeta.kv_addition(kv_in_1, kv_in_2)
+print(f"""Kv_in_devices_total = {kv_in_devices_total * 3600:.2f} m3/h""")
+kv_total_1 = kv_dzeta.kv_addition(kv_in_devices_total, kv_pipe_in)  # m^3/s
+kv_total_2 = kv_dzeta.kv_addition(kv_out_1, kv_pipe_out)  # m^3/s
+print(f"""Kv_in_total = {kv_total_1 * 3600:.2f} m3/h
+Kv_out_total = {kv_total_2 * 3600:.2f} m3/h""")
 
 
 def get_relative_valve_torque(rel_travel):
@@ -49,6 +61,8 @@ def get_f_result(x, v, pc_1, pc_2, plot=False, force_dict=None, flow_dict=None, 
     F_pressure__spring = F_pressure_1 - F_pressure_2 - F_spring
 
     if v == 0:
+    # print(v)
+    # if abs(v) < 0.2:
         if abs(F_pressure__spring) < F_static_load:
             F_result = 0
         else:
@@ -97,15 +111,25 @@ def ds_dt(t, y):
 
     if QV_IEC:
         # Cylinder 1
-        delta_p_1: float = P_in - pc_1
-        qm_1 = math.copysign(1, delta_p_1) * kv_dzeta.qm_calculated(kv_total_1, rho_in, abs(delta_p_1))
+        delta_p_1_calc: float = P_in - pc_1
+        delta_p_max_1 = x_t_valve * gamma_air * P_in / 1.4
+        delta_p_1 = min(delta_p_1_calc, delta_p_max_1)
+        qm_1_calc = math.copysign(1, delta_p_1) * kv_dzeta.qm_calculated(kv_total_1, rho_in, abs(delta_p_1))
+        delta_p_factor_1 = delta_p_1_calc / P_in
+        expansion_factor_1 = max(2/3, 1-1.4*delta_p_factor_1/(3*gamma_air*x_t_valve))
+        qm_1 = qm_1_calc * expansion_factor_1
         dpc_1dt = (k * R * T_in * qm_1) / (S * (x + x_01)) - k * pc_1 * v / (x + x_01)
         # Cylinder 2
-        delta_p_2: float = pc_2 - P_atm
+        delta_p_2_calc: float = pc_2 - P_atm
         T_2 = T_in * math.pow(abs(pc_2) / P_atm, (k - 1) / k)
-        print(f"{pc_2=}, T_2={T_2 - 273}")
+        # print(f"{pc_2=}, T_2={T_2 - 273}")
         rho_2 = abs(pc_2) / (R * T_2)
-        qm_2 = math.copysign(1, delta_p_2) * kv_dzeta.qm_calculated(kv_total_2, rho_2, abs(delta_p_2))
+        delta_p_max_2 = x_t_valve * gamma_air * pc_2 / 1.4
+        delta_p_2 = min(delta_p_2_calc, delta_p_max_2)
+        qm_2_calc = math.copysign(1, delta_p_2) * kv_dzeta.qm_calculated(kv_total_2, rho_2, abs(delta_p_2))
+        delta_p_factor_2 = delta_p_2_calc / pc_2
+        expansion_factor_2 = max(2/3, 1-1.4*delta_p_factor_2/(3*gamma_air*x_t_valve))
+        qm_2 = qm_2_calc * expansion_factor_2
         dpc_2dt = (-1) * (k * R * T_2 * qm_2) / (S * (xf - x + x_02)) + k * pc_2 * v / (xf - x + x_02)
     else:
         # Cylinder 1
@@ -180,7 +204,7 @@ pc2_0 = P_atm
 
 y0 = [x0, v0, pc1_0, pc2_0]
 t0 = 0
-t_final = 15
+t_final = 30
 ts = np.linspace(t0, t_final, 10_000)
 events = [work_hit_max,
           # p2_equals_atm,
