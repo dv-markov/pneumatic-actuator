@@ -1,9 +1,6 @@
-import math
-
 import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
-from pprint import pprint
 import kv_dzeta
 from initial_data import *
 
@@ -24,7 +21,8 @@ kv_pipe_in = kv_dzeta.kv_addition(kv_pipe_1, kv_pipe_2)
 print(f'Kv_pipe_in = {kv_pipe_in * 3600:.2f} m3/h')
 kv_pipe_3 = kv_dzeta.kv_calculated_for_pipe(d_pipe_3, le_pipe_3)
 print(f'Kv_pipe_3 = {kv_pipe_3 * 3600:.2f} m3/h')
-kv_pipe_out = kv_dzeta.kv_addition(kv_pipe_1, kv_pipe_3)
+kv_pipe_out = kv_dzeta.kv_addition(kv_pipe_2, kv_pipe_3)
+# kv_pipe_out = kv_pipe_3
 print(f'Kv_pipe_out = {kv_pipe_out * 3600:.2f} m3/h')
 print(f"""Kv_in_device_1 = {kv_in_1 * 3600:.2f} m3/h; Kv_in_device_2 = {kv_in_2 * 3600:.2f} m3/h""")
 print(f"""Kv_out_device_1 = {kv_out_1 * 3600:.2f} m3/h""")

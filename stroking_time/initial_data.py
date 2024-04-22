@@ -4,7 +4,8 @@ from valve_and_actuator_data import *
 # Variables
 # General data
 T_in = 20 + 273  # K
-P_supply = 3.5 * 100_000  # Pa
+# P_supply = 3.5 * 100_000  # Pa
+P_supply = 4.0 * 100_000  # Pa
 # P_supply = 6.0 * 100_000  # Pa
 P_in = P_supply + P_atm  # Pa
 P_master_force = 4.0 * 100_000 + P_atm
